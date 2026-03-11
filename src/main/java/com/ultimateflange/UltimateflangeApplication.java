@@ -4,6 +4,7 @@ import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 
 @SpringBootApplication
+@EnableAsync  // 👈 ADD THIS
 public class UltimateflangeApplication {
 
 	public static void main(String[] args) {
