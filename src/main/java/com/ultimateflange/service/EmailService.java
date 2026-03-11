@@ -8,89 +8,88 @@ import org.springframework.mail.MailAuthenticationException;
 import org.springframework.mail.MailSendException;
 import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
 @Service
 @RequiredArgsConstructor
 @Slf4j
 public class EmailService {
-
+    
     private final JavaMailSender mailSender;
-
-    @Value("${admin.email}")
+    
+    @Value("${admin.email:mushaabkhan894@gmail.com}")
     private String adminEmail;
-
+    
+    @Async  // Email background mein bhejo - fast response ke liye
     public void sendOrderNotification(Order order) {
         try {
-            log.info("📧 Preparing to send order notification email to: {}", adminEmail);
+            log.info("📧 Preparing email for order: {}", order.getOrderRef());
+            log.info("📧 Admin email: {}", adminEmail);
             log.info("📧 SMTP Host: smtp.gmail.com, Port: 587");
-            log.info("📧 Username: {}", adminEmail);
-
-            sendEmailToAdmin(order);
-            sendEmailToCustomer(order);
-
-            log.info("✅ All emails sent successfully!");
-
+            log.info("📧 Username: mushaabkhan894@gmail.com");
+            
+            // Admin email
+            sendEmail(
+                adminEmail,
+                "🛒 NEW ORDER - " + order.getOrderRef(),
+                buildAdminEmail(order)
+            );
+            
+            // Customer email
+            sendEmail(
+                order.getCustomerEmail(),
+                "✅ Order Confirmation - " + order.getOrderRef(),
+                buildCustomerEmail(order)
+            );
+            
+            log.info("✅ Emails sent successfully!");
+            
         } catch (MailAuthenticationException e) {
-            log.error("❌ Gmail authentication failed! App password sahi hai?");
-            log.error("❌ Error: {}", e.getMessage());
-            log.error("✅ Solution: Google Account → Security → App Passwords generate karo");
+            log.error("❌ Gmail AUTHENTICATION FAILED! App password sahi nahi hai!");
+            log.error("Error: {}", e.getMessage());
+            log.error("✅ Solution: App password mein SPACES nahi hone chahiye!");
+            log.error("✅ Example: 'abcd efgh ijkl mnop' → 'abcdefghijklmnop'");
         } catch (MailSendException e) {
-            log.error("❌ Mail server connection failed: {}", e.getMessage());
+            log.error("❌ Mail SEND failed: {}", e.getMessage());
         } catch (Exception e) {
             log.error("❌ Unexpected error: {}", e.getMessage());
         }
     }
-
-    private void sendEmailToAdmin(Order order) {
+    
+    private void sendEmail(String to, String subject, String text) {
         try {
             SimpleMailMessage message = new SimpleMailMessage();
-            message.setTo(adminEmail);
-            message.setSubject("🛒 NEW ORDER RECEIVED - " + order.getOrderRef());
-            message.setText(buildAdminEmailBody(order));
-
+            message.setTo(to);
+            message.setSubject(subject);
+            message.setText(text);
+            
             mailSender.send(message);
-            log.info("✅ Admin notification sent to: {}", adminEmail);
-
+            log.info("✅ Email sent to: {}", to);
+            
         } catch (Exception e) {
-            log.error("❌ Failed to send admin email: {}", e.getMessage());
+            log.error("❌ Failed to send email to {}: {}", to, e.getMessage());
             throw e;
         }
     }
-
-    private void sendEmailToCustomer(Order order) {
-        try {
-            SimpleMailMessage message = new SimpleMailMessage();
-            message.setTo(order.getCustomerEmail());
-            message.setSubject("✅ Order Confirmation - " + order.getOrderRef());
-            message.setText(buildCustomerEmailBody(order));
-
-            mailSender.send(message);
-            log.info("✅ Customer confirmation sent to: {}", order.getCustomerEmail());
-
-        } catch (Exception e) {
-            log.error("❌ Failed to send customer email: {}", e.getMessage());
-        }
-    }
-
-    private String buildAdminEmailBody(Order order) {
+    
+    private String buildAdminEmail(Order order) {
         return String.format("""
             ========================================
-            🔔 NEW ORDER RECEIVED
+            🛒 NEW ORDER RECEIVED
             ========================================
             
             Order Reference: %s
-            Order Date: %s
-            Status: %s
+            Date: %s
             
-            📦 PRODUCT DETAILS:
+            PRODUCT:
             Product: %s
             Quantity: %d
             Size: %s
             Material: %s
             Amount: ₹%.2f
             
-            👤 CUSTOMER DETAILS:
+            CUSTOMER:
             Name: %s
             Email: %s
             Phone: %s
@@ -98,22 +97,21 @@ public class EmailService {
             
             ========================================
             """,
-                order.getOrderRef(),
-                order.getOrderDate(),
-                order.getStatus(),
-                order.getProductName(),
-                order.getQuantity(),
-                order.getSize() != null ? order.getSize() : "N/A",
-                order.getMaterial() != null ? order.getMaterial() : "N/A",
-                order.getAmount() != null ? order.getAmount() : 0.0,
-                order.getCustomerName(),
-                order.getCustomerEmail(),
-                order.getCustomerPhone() != null ? order.getCustomerPhone() : "N/A",
-                order.getCustomerCompany() != null ? order.getCustomerCompany() : "N/A"
+            order.getOrderRef(),
+            order.getOrderDate(),
+            order.getProductName(),
+            order.getQuantity(),
+            order.getSize() != null ? order.getSize() : "N/A",
+            order.getMaterial() != null ? order.getMaterial() : "N/A",
+            order.getAmount() != null ? order.getAmount() : 0,
+            order.getCustomerName(),
+            order.getCustomerEmail(),
+            order.getCustomerPhone() != null ? order.getCustomerPhone() : "N/A",
+            order.getCustomerCompany() != null ? order.getCustomerCompany() : "N/A"
         );
     }
-
-    private String buildCustomerEmailBody(Order order) {
+    
+    private String buildCustomerEmail(Order order) {
         return String.format("""
             Dear %s,
             
@@ -123,15 +121,17 @@ public class EmailService {
             Product: %s
             Quantity: %d
             
-            The supplier will contact you within 24 hours.
+            Your order has been sent to %s.
+            They will contact you within 24 hours.
             
             Regards,
             Ultimate Flange Team
             """,
-                order.getCustomerName(),
-                order.getOrderRef(),
-                order.getProductName(),
-                order.getQuantity()
+            order.getCustomerName(),
+            order.getOrderRef(),
+            order.getProductName(),
+            order.getQuantity(),
+            order.getSupplierName()
         );
     }
 }
