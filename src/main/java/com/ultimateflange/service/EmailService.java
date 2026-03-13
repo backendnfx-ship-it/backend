@@ -6,7 +6,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
-import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -22,11 +21,11 @@ public class EmailService {
     @Value("${admin.email}")
     private String adminEmail;
 
-    @Async
     public void sendOrderNotification(Order order) {
+
         try {
 
-            log.info("Preparing email for order {}", order.getOrderRef());
+            log.info("📧 Preparing email for order {}", order.getOrderRef());
 
             // Admin email
             sendEmail(
@@ -36,58 +35,68 @@ public class EmailService {
             );
 
             // Customer email
-            if (order.getCustomerEmail() != null) {
+            if (order.getCustomerEmail() != null && !order.getCustomerEmail().isEmpty()) {
+
                 sendEmail(
                         order.getCustomerEmail(),
                         "Order Confirmation - " + order.getOrderRef(),
                         buildCustomerEmail(order)
                 );
+
             }
 
-            log.info("Emails sent successfully");
+            log.info("✅ Emails sent successfully");
 
         } catch (Exception e) {
-            log.error("Email sending failed {}", e.getMessage());
+
+            log.error("❌ Email sending failed: {}", e.getMessage());
+            e.printStackTrace();
+
         }
+
     }
 
     private void sendEmail(String to, String subject, String text) {
 
-        SimpleMailMessage message = new SimpleMailMessage();
+        try {
 
-        message.setFrom(fromEmail);   // ⭐ important fix
-        message.setTo(to);
-        message.setSubject(subject);
-        message.setText(text);
+            SimpleMailMessage message = new SimpleMailMessage();
 
-        mailSender.send(message);
+            message.setFrom(fromEmail);
+            message.setTo(to);
+            message.setSubject(subject);
+            message.setText(text);
 
-        log.info("Email sent to {}", to);
+            mailSender.send(message);
+
+            log.info("✅ Email sent to {}", to);
+
+        } catch (Exception e) {
+
+            log.error("❌ Failed to send email to {} : {}", to, e.getMessage());
+            throw e;
+
+        }
+
     }
 
     private String buildAdminEmail(Order order) {
 
-        return String.format("""
-                ==============================
-                NEW ORDER RECEIVED
-                ==============================
-
-                Order Reference: %s
-                Date: %s
-
-                PRODUCT
-                Product: %s
-                Quantity: %d
-                Size: %s
-                Material: %s
-                Amount: ₹%.2f
-
-                CUSTOMER
-                Name: %s
-                Email: %s
-                Phone: %s
-                Company: %s
-                """,
+        return String.format(
+                "NEW ORDER RECEIVED\n\n" +
+                "Order Reference: %s\n" +
+                "Date: %s\n\n" +
+                "PRODUCT\n" +
+                "Product: %s\n" +
+                "Quantity: %d\n" +
+                "Size: %s\n" +
+                "Material: %s\n" +
+                "Amount: ₹%.2f\n\n" +
+                "CUSTOMER\n" +
+                "Name: %s\n" +
+                "Email: %s\n" +
+                "Phone: %s\n" +
+                "Company: %s",
 
                 order.getOrderRef(),
                 order.getOrderDate(),
@@ -105,20 +114,15 @@ public class EmailService {
 
     private String buildCustomerEmail(Order order) {
 
-        return String.format("""
-                Dear %s,
-
-                Thank you for your order.
-
-                Order Reference: %s
-                Product: %s
-                Quantity: %d
-
-                We will contact you within 24 hours.
-
-                Regards
-                Ultimate Flange Team
-                """,
+        return String.format(
+                "Dear %s,\n\n" +
+                "Thank you for your order.\n\n" +
+                "Order Reference: %s\n" +
+                "Product: %s\n" +
+                "Quantity: %d\n\n" +
+                "We will contact you within 24 hours.\n\n" +
+                "Regards\n" +
+                "Ultimate Flange Team",
 
                 order.getCustomerName(),
                 order.getOrderRef(),
